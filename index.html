@@ -284,7 +284,7 @@ function renderDash() {
   list.innerHTML = f.map(r => {
     const bc = r.status==='Новая'?'b-new':r.status==='В работе'?'b-wip':'b-done';
     const photos = r.photos.length
-      ? `<div class="req-photos">${r.photos.map(p=>`<a href="${p}" target="_blank"><img src="${p}" alt="фото"></a>`).join('')}</div>`
+      ? `<div class="req-photos">${r.photos.map(p=>`<img src="${p}" alt="фото" onclick="document.getElementById('lb-img').src=this.src;document.getElementById('lb').style.display='flex'" style="cursor:zoom-in">`).join('')}</div>`
       : '';
     return `<div class="req">
       <div class="req-head">
@@ -349,5 +349,8 @@ async function apiCall(data) {
   return res.json();
 }
 </script>
+  <div id="lb" onclick="this.style.display='none'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:center;justify-content:center;cursor:zoom-out">
+  <img id="lb-img" style="max-width:92vw;max-height:92vh;border-radius:8px;object-fit:contain">
+</div>
 </body>
 </html>
