@@ -289,7 +289,7 @@ function renderDash() {
     return `<div class="req">
       <div class="req-head">
         <div>
-          <div class="req-meta">${r.date} · ${r.room} · ${r.phone}</div>
+          <div class="req-meta">${fmtDate(r.date)} · ${r.room} · ${r.phone}</div>
           <div class="req-name">${r.name}</div>
         </div>
         <span class="badge ${bc}">${r.status}</span>
@@ -324,6 +324,12 @@ async function saveNote(id, sheet, note) {
   await apiCall({ action:'setStatus', pass:savedPass, id, sheet, status: allReqs.find(r=>String(r.id)===String(id))?.status, note });
 }
 
+  function fmtDate(d) {
+  try {
+    const dt = new Date(d);
+    return dt.toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  } catch(e) { return d; }
+}
 function fCat(btn) {
   document.querySelectorAll('#cat-filters .filt').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active'); curCat=btn.dataset.cat; renderDash();
