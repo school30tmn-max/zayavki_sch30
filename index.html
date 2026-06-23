@@ -501,7 +501,7 @@ async function toggleArchive() {
 function fmtDate(d) {
   try {
     const dt = new Date(d);
-    return dt.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    return dt.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Yekaterinburg'});
   } catch(e) { return d; }
 }
 function fCat(btn) {
