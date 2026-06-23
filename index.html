@@ -219,6 +219,7 @@ textarea{resize:vertical;min-height:90px}
     <button class="filt" data-st="Выполнено" onclick="fSt(this)">Выполнено</button>
   </div>
 
+  <div id="smart-filters" class="filters" style="margin-bottom:14px"></div>
   <div class="date-row">
     <label>С:</label>
     <input type="date" id="date-from">
@@ -248,7 +249,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbwufM8p19ARGL3SCo4WVBnV
 
 let photos = [];
 let allReqs = [];
-let curCat = 'all', curSt = 'all', curSub = 'all';
+let curCat = 'all', curSt = 'all', curSub = [];
 let dateFrom = null, dateTo = null;
 let savedPass = '';
 let archiveVisible = false;
@@ -372,148 +373,86 @@ function inDateRange(req) {
 }
 
 function renderDash() {
-  const total=allReqs.length, nw=allReqs.filter(r=>r.status==='Новая').length,
-        wip=allReqs.filter(r=>r.status==='В работе').length,
-        done=allReqs.filter(r=>r.status==='Выполнено').length;
-  const overdueCount = allReqs.filter(r=>isOverdue(r)).length;
+  const active = allReqs.filter(r=>r.status!=='Архив');
+  const total = active.length,
+    nw   = active.filter(r=>r.status==='Новая').length,
+    wip  = active.filter(r=>r.status==='В работе').length,
+    done = active.filter(r=>r.status==='Выполнено').length,
+    prol = active.filter(r=>r.status==='В работе'&&r.sub==='Продление').length,
+    lng  = active.filter(r=>r.status==='В работе'&&r.sub==='Долгосрочный ремонт').length;
 
+  // Статистика
   document.getElementById('stats').innerHTML = [
     ['Всего',total,'all','all'],
     ['Новые',nw,'all','Новая'],
     ['В работе',wip,'all','В работе'],
     ['Выполнено',done,'all','Выполнено']
-  ].map(([l,n,cat,st])=>`
-    <div class="stat" onclick="quickFilter('${cat}','${st}')">
-      <div class="n">${n}</div>
-      <div class="l">${l}${l==='В работе'&&overdueCount>0?` <span style="color:#E24B4A;font-size:11px">(${overdueCount} просрочено)</span>`:''}</div>
-    </div>`).join('');
+  ].map(([l,n,cat,st])=>`<div class="stat" onclick="quickFilter('${cat}','${st}')"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
 
-  let f = allReqs.filter(r => r.status !== 'Архив');
+  // Умные фильтры
+  renderSmartFilters(active, prol, lng);
+
+  // Фильтрация
+  let f = active;
   if (curCat !== 'all') f = f.filter(r=>r.cat===curCat);
   if (curSt  !== 'all') f = f.filter(r=>r.status===curSt);
+  if (curSub.length > 0) f = f.filter(r=>curSub.includes(r.sub));
   f = f.filter(r=>inDateRange(r));
-  if (curSub !== 'all') f = f.filter(r=>curSub.includes(r.sub));
 
   const list = document.getElementById('req-list');
   if (!f.length) { list.innerHTML='<div class="empty">Заявок не найдено</div>'; return; }
-  list.innerHTML = f.map(r => renderReq(r)).join('');
+  list.innerHTML = f.map(r=>renderReq(r)).join('');
 }
 
-function renderReq(r, isArch) {
-  const overdue = isOverdue(r);
-  const bc = r.status==='Новая'?'b-new':r.status==='В работе'?(overdue?'b-overdue':'b-wip'):'b-done';
-  const subBadge = r.sub==='Продление'
-    ? '<span class="badge b-sub">⏳ Продление</span>'
-    : r.sub==='Долгосрочный ремонт'
-    ? '<span class="badge b-longterm">🔧 Долгосрочный ремонт</span>'
-    : '';
-  const photosHtml = r.photos && r.photos.length
-    ? `<div class="req-photos">${r.photos.map(p=>`<img src="${p}" alt="фото" onclick="openLb(this.src)">`).join('')}</div>`
-    : '';
-  const histHtml = r.history && r.history.length > 1
-    ? `<div class="history"><div class="history-title">История изменений</div>${r.history.map(h=>`<div class="history-item"><span class="h-time">${h.time}</span><span class="h-status">${h.status}</span>${h.note?`<span style="color:var(--text3)"> — ${h.note}</span>`:''}</div>`).join('')}</div>`
-    : '';
-  const subSel = !isArch && r.status==='В работе'
-    ? `<select class="status-sel" style="width:100%" onchange="changeSub('${r.id}','${r.sheet}',this.value)">
-        <option value="" ${!r.sub?'selected':''}>— уточнение —</option>
-        <option ${r.sub==='Продление'?'selected':''}>Продление</option>
-        <option ${r.sub==='Долгосрочный ремонт'?'selected':''}>Долгосрочный ремонт</option>
-       </select>`
-    : '';
-  const noteField = !isArch
-    ? `<textarea class="note-input" placeholder="Комментарий исполнителя" onchange="saveNote('${r.id}','${r.sheet}',this.value)">${(r.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>`
-    : '';
-  const statusSel = !isArch
-    ? `<select class="status-sel" style="width:100%" onchange="changeStatus('${r.id}','${r.sheet}',this.value)">
-        <option ${r.status==='Новая'?'selected':''}>Новая</option>
-        <option ${r.status==='В работе'?'selected':''}>В работе</option>
-        <option ${r.status==='Выполнено'?'selected':''}>Выполнено</option>
-       </select>${subSel}`
-    : '';
-  const archBtn = !isArch
-    ? `<button class="arch-btn" onclick="archiveReq('${r.id}','${r.sheet}')" title="В архив">📦</button>`
-    : `<button class="unarch-btn" onclick="unarchiveReq('${r.id}','${r.sheet}')" title="Вернуть из архива">↩ Вернуть</button>`;
-  return `<div class="req${overdue?' overdue':''}">
-    <div class="req-head">
-      <div>
-        <div class="req-meta">${fmtDate(r.date)} · ${r.room} · ${r.phone}</div>
-        <div class="req-name">${r.name}</div>
-      </div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <span class="badge ${bc}">${overdue && r.status==='В работе'?'⚠ В работе':r.status}</span>
-        ${subBadge}
-        ${archBtn}
-      </div>
-    </div>
-    <span class="badge b-cat">${r.cat}</span>
-    <div class="req-desc">${r.desc}</div>
-    <div class="req-foot">
-      ${photosHtml}
-      <div class="req-controls">
-        ${noteField}
-        ${statusSel}
-      </div>
-    </div>
-    ${histHtml}
-  </div>`;
+function renderSmartFilters(active, prol, lng) {
+  const cats = ['Сантехника','Электрика','Системное администрирование','Клининг','Пропускные карты','Иное'];
+  const catLabels = {'Сантехника':'Сантехника','Электрика':'Электрика','Системное администрирование':'Сисадмин','Клининг':'Клининг','Пропускные карты':'Пропуска','Иное':'Иное'};
+  const statuses = [
+    {st:'all', label:'Все статусы'},
+    {st:'Новая', label:'Новые'},
+    {st:'В работе', label:'В работе'},
+    {st:'Выполнено', label:'Выполнено'}
+  ];
+
+  let html = '';
+
+  // Строка 1: статусы
+  html += statuses.map(({st, label}) => {
+    const n = st==='all' ? active.length : active.filter(r=>r.status===st).length;
+    const isActive = curSt===st;
+    return `<button class="filt${isActive?' active':''}" onclick="fStSmart('${st}')">${label} <span style="opacity:.7">${n}</span></button>`;
+  }).join('');
+
+  // Строка 2 (только если выбрано "В работе"): тогглы подстатусов
+  if (curSt === 'В работе') {
+    html += ' <span style="color:var(--border2);margin:0 4px">|</span> ';
+    [{sub:'Продление',label:'⏳ Продление',n:prol},{sub:'Долгосрочный ремонт',label:'🔧 Долгосрочный ремонт',n:lng}].forEach(({sub,label,n})=>{
+      const isActive = curSub.includes(sub);
+      html += `<button class="filt${isActive?' active':''}" onclick="fSubSmart('${sub}')">${label} <span style="opacity:.7">${n}</span></button> `;
+    });
+  }
+
+  // Разделитель
+  html += '<br style="width:100%;display:block;margin:6px 0">';
+
+  // Строка 3: категории
+  cats.forEach(cat => {
+    const n = active.filter(r=>r.cat===cat).length;
+    const isActive = curCat===cat;
+    html += `<button class="filt${isActive?' active':''}" onclick="fCatSmart('${cat}')">${catLabels[cat]} <span style="opacity:.7">${n}</span></button> `;
+  });
+
+  document.getElementById('smart-filters').innerHTML = html;
 }
 
-
-function quickFilter(cat, st) {
-  curCat = cat; curSt = st;
-  document.querySelectorAll('#cat-filters .filt').forEach(b=>b.classList.toggle('active',b.dataset.cat===cat));
-  document.querySelectorAll('#status-filters .filt').forEach(b=>b.classList.toggle('active',b.dataset.st===st));
+function fStSmart(st) { curSt=st; curSub=[]; renderDash(); }
+function fCatSmart(cat) { curCat = curCat===cat ? 'all' : cat; renderDash(); }
+function fSubSmart(sub) {
+  const idx = curSub.indexOf(sub);
+  if (idx>=0) curSub.splice(idx,1); else curSub.push(sub);
   renderDash();
 }
 
-async function changeStatus(id, sheet, status) {
-  const req = allReqs.find(r=>String(r.id)===String(id));
-  if (!req) return;
-  const oldStatus = req.status;
-  req.status = status;
-  if (oldStatus !== status) {
-    const now = fmtDate(new Date().toISOString());
-    req.history = req.history || [];
-    req.history.push({ status, time: now, note: req.note||'' });
-  }
-  renderDash();
-  await apiCall({ action:'setStatus', pass:savedPass, id, sheet, status });
-}
-
-async function saveNote(id, sheet, note) {
-  const req = allReqs.find(r=>String(r.id)===String(id));
-  if (req) req.note = note;
-  await apiCall({ action:'setStatus', pass:savedPass, id, sheet, status:req?.status, note });
-}
-
-async function archiveReq(id, sheet) {
-  if (!confirm('Архивировать заявку? Она исчезнет из основного списка.')) return;
-  const res = await apiCall({ action:'setStatus', pass:savedPass, id, sheet, status:'Архив' });
-  if (res.ok) {
-    allReqs = allReqs.filter(r=>String(r.id)!==String(id));
-    renderDash();
-  }
-}
-
-async function toggleArchive() {
-  archiveVisible = !archiveVisible;
-  const el = document.getElementById('arch-list');
-  const btn = document.querySelector('.show-arch');
-  if (!archiveVisible) { el.style.display='none'; btn.textContent='📦 Показать архив'; return; }
-  btn.textContent='📦 Скрыть архив';
-  el.style.display='block';
-  el.innerHTML='<span class="spinner"></span> Загрузка архива...';
-  try {
-    const res = await apiCall({ action:'getArchive', pass:savedPass });
-    if (res.ok && res.data.length) {
-      el.innerHTML = res.data.map(r=>renderReq(r, true)).join('');
-    } else {
-      el.innerHTML='<div class="empty">Архив пуст</div>';
-    }
-  } catch(e) {
-    el.innerHTML='<div class="empty">Ошибка загрузки архива</div>';
-  }
-}
 
 function fmtDate(d) {
   try {
@@ -521,26 +460,7 @@ function fmtDate(d) {
     return dt.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Yekaterinburg'});
   } catch(e) { return d; }
 }
-function fSub(btn) {
-  btn.classList.toggle('active');
-  const active = [...document.querySelectorAll('#sub-filters .filt.active')].map(b=>b.dataset.sub);
-  curSub = active.length ? active : 'all';
-  renderDash();
-}
 
-function fCat(btn) {
-  document.querySelectorAll('#cat-filters .filt').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active'); curCat=btn.dataset.cat; renderDash();
-}
-function fSt(btn) {
-  document.querySelectorAll('#status-filters .filt').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active'); curSt=btn.dataset.st;
-  const subF = document.getElementById('sub-filters');
-  if (subF) subF.style.display = curSt==='В работе' ? 'flex' : 'none';
-  if (curSt !== 'В работе') { curSub = 'all'; document.querySelectorAll('#sub-filters .filt').forEach(b=>b.classList.toggle('active',b.dataset.sub==='all')); }
-  if (curSt !== 'В работе') curSub = 'all';
-  renderDash();
-}
 function openLb(src) {
   document.getElementById('lb-img').src=src;
   document.getElementById('lb').style.display='flex';
