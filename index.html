@@ -445,7 +445,7 @@ function renderReq(r, isArch) {
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         ${archBtn}
         ${!isArch?`<textarea class="note-input" placeholder="Комментарий исполнителя"
-          onchange="saveNote('${r.id}','${r.sheet}',this.value)">${r.note||''}</textarea>
+          onchange="saveNote('${r.id}','${r.sheet}',this.value)">${(r.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
         <select class="status-sel" onchange="changeStatus('${r.id}','${r.sheet}',this.value)">
           <option ${r.status==='Новая'?'selected':''}>Новая</option>
           <option ${r.status==='В работе'?'selected':''}>В работе</option>
@@ -456,6 +456,7 @@ function renderReq(r, isArch) {
     </div>
     ${histHtml}
   </div>`;
+}
 
 function quickFilter(cat, st) {
   curCat = cat; curSt = st;
