@@ -228,11 +228,6 @@ textarea{resize:vertical;min-height:90px}
     <button onclick="clearDates()">Сбросить</button>
   </div>
 
-  <div class="filters" id="sub-filters" style="display:none">
-    <button class="filt active" data-sub="all" onclick="fSub(this)">Все уточнения</button>
-    <button class="filt" data-sub="Продление" onclick="fSub(this)">⏳ Продление</button>
-    <button class="filt" data-sub="Долгосрочный ремонт" onclick="fSub(this)">🔧 Долгосрочный ремонт</button>
-  </div>
   <div id="loading" style="padding:20px;color:var(--text2);font-size:14px;display:none"><span class="spinner"></span>Загрузка заявок...</div>
   <div class="req-list" id="req-list"></div>
   <div style="margin-top:16px">
@@ -397,7 +392,7 @@ function renderDash() {
   if (curCat !== 'all') f = f.filter(r=>r.cat===curCat);
   if (curSt  !== 'all') f = f.filter(r=>r.status===curSt);
   f = f.filter(r=>inDateRange(r));
-  if (curSub !== 'all') f = f.filter(r=>r.sub===curSub);
+  if (curSub !== 'all') f = f.filter(r=>curSub.includes(r.sub));
 
   const list = document.getElementById('req-list');
   if (!f.length) { list.innerHTML='<div class="empty">Заявок не найдено</div>'; return; }
@@ -405,8 +400,8 @@ function renderDash() {
 }
 
 function renderReq(r, isArch) {
-  const bc = r.status==='Новая'?'b-new':r.status==='В работе'?'b-wip':'b-done';
   const overdue = isOverdue(r);
+  const bc = r.status==='Новая'?'b-new':r.status==='В работе'?(overdue?'b-overdue':'b-wip'):'b-done';
   const subBadge = r.sub==='Продление'
     ? '<span class="badge b-sub">⏳ Продление</span>'
     : r.sub==='Долгосрочный ремонт'
@@ -445,8 +440,7 @@ function renderReq(r, isArch) {
         <div class="req-name">${r.name}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        ${overdue?'<span class="badge b-overdue">⚠ Давно в работе</span>':''}
-        <span class="badge ${bc}">${r.status}</span>
+        <span class="badge ${bc}">${overdue && r.status==='В работе'?'⚠ В работе':r.status}</span>
         ${subBadge}
         ${archBtn}
       </div>
@@ -528,9 +522,9 @@ function fmtDate(d) {
   } catch(e) { return d; }
 }
 function fSub(btn) {
-  document.querySelectorAll('#sub-filters .filt').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  curSub = btn.dataset.sub;
+  btn.classList.toggle('active');
+  const active = [...document.querySelectorAll('#sub-filters .filt.active')].map(b=>b.dataset.sub);
+  curSub = active.length ? active : 'all';
   renderDash();
 }
 
@@ -543,6 +537,7 @@ function fSt(btn) {
   btn.classList.add('active'); curSt=btn.dataset.st;
   const subF = document.getElementById('sub-filters');
   if (subF) subF.style.display = curSt==='В работе' ? 'flex' : 'none';
+  if (curSt !== 'В работе') { curSub = 'all'; document.querySelectorAll('#sub-filters .filt').forEach(b=>b.classList.toggle('active',b.dataset.sub==='all')); }
   if (curSt !== 'В работе') curSub = 'all';
   renderDash();
 }
