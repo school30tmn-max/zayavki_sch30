@@ -109,6 +109,8 @@ textarea{resize:vertical;min-height:90px}
 .b-done{background:var(--green-bg);color:var(--green-text)}
 .b-cat{background:var(--bg2);color:var(--text2);font-weight:400}
 .b-overdue{background:var(--red-bg);color:var(--red-text);font-size:11px}
+.b-sub{background:#EEF1FC;color:#1e35a8;font-size:11px;border:1px solid #c5cef5}
+.b-longterm{background:#FFF3CC;color:#7a4a00;font-size:11px;border:1px solid #f0d87a}
 .status-sel{font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);cursor:pointer}
 .note-input{font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);width:160px}
 .arch-btn{font-size:12px;padding:5px 10px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text3);cursor:pointer;transition:all .15s}
@@ -395,6 +397,11 @@ function renderDash() {
 function renderReq(r, isArch) {
   const bc = r.status==='Новая'?'b-new':r.status==='В работе'?'b-wip':'b-done';
   const overdue = isOverdue(r);
+  const subBadge = r.sub==='Продление'
+    ? '<span class="badge b-sub">⏳ Продление</span>'
+    : r.sub==='Долгосрочный ремонт'
+    ? '<span class="badge b-longterm">🔧 Долгосрочный ремонт</span>'
+    : '';
   const photosHtml = r.photos && r.photos.length
     ? `<div class="req-photos">${r.photos.map(p=>`<img src="${p}" alt="фото" onclick="openLb(this.src)">`).join('')}</div>`
     : '';
@@ -412,6 +419,13 @@ function renderReq(r, isArch) {
   const archBtn = !isArch
     ? `<button class="arch-btn" onclick="archiveReq('${r.id}','${r.sheet}')" title="Архивировать">📦</button>`
     : '';
+  const subSel = !isArch && r.status==='В работе'
+    ? `<select class="status-sel" onchange="changeSub('${r.id}','${r.sheet}',this.value)" title="Уточнение статуса">
+        <option value="" ${!r.sub?'selected':''}>— уточнение —</option>
+        <option ${r.sub==='Продление'?'selected':''}>Продление</option>
+        <option ${r.sub==='Долгосрочный ремонт'?'selected':''}>Долгосрочный ремонт</option>
+       </select>`
+    : '';
   return `<div class="req${overdue?' overdue':''}">
     <div class="req-head">
       <div>
@@ -421,6 +435,7 @@ function renderReq(r, isArch) {
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         ${overdue?'<span class="badge b-overdue">⚠ Давно в работе</span>':''}
         <span class="badge ${bc}">${r.status}</span>
+        ${subBadge}
       </div>
     </div>
     <span class="badge b-cat">${r.cat}</span>
@@ -429,18 +444,18 @@ function renderReq(r, isArch) {
       ${photosHtml}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         ${archBtn}
-        ${!isArch?`<input class="note-input" placeholder="Комментарий исполнителя" value="${r.note||''}"
-          onchange="saveNote('${r.id}','${r.sheet}',this.value)">
+        ${!isArch?`<textarea class="note-input" placeholder="Комментарий исполнителя"
+          onchange="saveNote('${r.id}','${r.sheet}',this.value)">${r.note||''}</textarea>
         <select class="status-sel" onchange="changeStatus('${r.id}','${r.sheet}',this.value)">
           <option ${r.status==='Новая'?'selected':''}>Новая</option>
           <option ${r.status==='В работе'?'selected':''}>В работе</option>
           <option ${r.status==='Выполнено'?'selected':''}>Выполнено</option>
-        </select>`:'<span class="badge b-cat">Архив · '+r.sheet+'</span>'}
+        </select>
+        ${subSel}`:'<span class="badge b-cat">Архив · '+r.sheet+'</span>'}
       </div>
     </div>
     ${histHtml}
   </div>`;
-}
 
 function quickFilter(cat, st) {
   curCat = cat; curSt = st;
