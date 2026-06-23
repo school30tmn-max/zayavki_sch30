@@ -112,8 +112,12 @@ textarea{resize:vertical;min-height:90px}
 .b-sub{background:#EEF1FC;color:#1e35a8;font-size:11px;border:1px solid #c5cef5}
 .b-longterm{background:#FFF3CC;color:#7a4a00;font-size:11px;border:1px solid #f0d87a}
 .status-sel{font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);cursor:pointer}
-.note-input{font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);width:160px}
-.arch-btn{font-size:12px;padding:5px 10px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text3);cursor:pointer;transition:all .15s}
+.note-input{font-size:12px;padding:6px 9px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);width:100%;height:68px;resize:none;overflow-y:auto;vertical-align:top;font-family:inherit}
+.arch-btn{font-size:12px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text3);cursor:pointer;transition:all .15s}
+.arch-btn:hover{background:var(--red-bg);color:var(--red-text);border-color:#F09595}
+.unarch-btn{font-size:12px;padding:4px 8px;border:1.5px solid var(--green);border-radius:6px;background:var(--bg);color:var(--green);cursor:pointer;transition:all .15s}
+.unarch-btn:hover{background:var(--green-bg)}
+.req-controls{display:grid;grid-template-columns:1fr;gap:6px;min-width:190px}
 .arch-btn:hover{background:var(--red-bg);color:var(--red-text);border-color:#F09595}
 .history{margin-top:10px;border-top:1px solid var(--border);padding-top:8px}
 .history-title{font-size:11px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
@@ -224,6 +228,11 @@ textarea{resize:vertical;min-height:90px}
     <button onclick="clearDates()">Сбросить</button>
   </div>
 
+  <div class="filters" id="sub-filters" style="display:none">
+    <button class="filt active" data-sub="all" onclick="fSub(this)">Все уточнения</button>
+    <button class="filt" data-sub="Продление" onclick="fSub(this)">⏳ Продление</button>
+    <button class="filt" data-sub="Долгосрочный ремонт" onclick="fSub(this)">🔧 Долгосрочный ремонт</button>
+  </div>
   <div id="loading" style="padding:20px;color:var(--text2);font-size:14px;display:none"><span class="spinner"></span>Загрузка заявок...</div>
   <div class="req-list" id="req-list"></div>
   <div style="margin-top:16px">
@@ -244,7 +253,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbwufM8p19ARGL3SCo4WVBnV
 
 let photos = [];
 let allReqs = [];
-let curCat = 'all', curSt = 'all';
+let curCat = 'all', curSt = 'all', curSub = 'all';
 let dateFrom = null, dateTo = null;
 let savedPass = '';
 let archiveVisible = false;
@@ -388,6 +397,7 @@ function renderDash() {
   if (curCat !== 'all') f = f.filter(r=>r.cat===curCat);
   if (curSt  !== 'all') f = f.filter(r=>r.status===curSt);
   f = f.filter(r=>inDateRange(r));
+  if (curSub !== 'all') f = f.filter(r=>r.sub===curSub);
 
   const list = document.getElementById('req-list');
   if (!f.length) { list.innerHTML='<div class="empty">Заявок не найдено</div>'; return; }
@@ -406,26 +416,28 @@ function renderReq(r, isArch) {
     ? `<div class="req-photos">${r.photos.map(p=>`<img src="${p}" alt="фото" onclick="openLb(this.src)">`).join('')}</div>`
     : '';
   const histHtml = r.history && r.history.length > 1
-    ? `<div class="history">
-        <div class="history-title">История изменений</div>
-        ${r.history.map(h=>`
-          <div class="history-item">
-            <span class="h-time">${h.time}</span>
-            <span class="h-status">${h.status}</span>
-            ${h.note?`<span style="color:var(--text3)">— ${h.note}</span>`:''}
-          </div>`).join('')}
-       </div>`
-    : '';
-  const archBtn = !isArch
-    ? `<button class="arch-btn" onclick="archiveReq('${r.id}','${r.sheet}')" title="Архивировать">📦</button>`
+    ? `<div class="history"><div class="history-title">История изменений</div>${r.history.map(h=>`<div class="history-item"><span class="h-time">${h.time}</span><span class="h-status">${h.status}</span>${h.note?`<span style="color:var(--text3)"> — ${h.note}</span>`:''}</div>`).join('')}</div>`
     : '';
   const subSel = !isArch && r.status==='В работе'
-    ? `<select class="status-sel" onchange="changeSub('${r.id}','${r.sheet}',this.value)" title="Уточнение статуса">
+    ? `<select class="status-sel" style="width:100%" onchange="changeSub('${r.id}','${r.sheet}',this.value)">
         <option value="" ${!r.sub?'selected':''}>— уточнение —</option>
         <option ${r.sub==='Продление'?'selected':''}>Продление</option>
         <option ${r.sub==='Долгосрочный ремонт'?'selected':''}>Долгосрочный ремонт</option>
        </select>`
     : '';
+  const noteField = !isArch
+    ? `<textarea class="note-input" placeholder="Комментарий исполнителя" onchange="saveNote('${r.id}','${r.sheet}',this.value)">${(r.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>`
+    : '';
+  const statusSel = !isArch
+    ? `<select class="status-sel" style="width:100%" onchange="changeStatus('${r.id}','${r.sheet}',this.value)">
+        <option ${r.status==='Новая'?'selected':''}>Новая</option>
+        <option ${r.status==='В работе'?'selected':''}>В работе</option>
+        <option ${r.status==='Выполнено'?'selected':''}>Выполнено</option>
+       </select>${subSel}`
+    : '';
+  const archBtn = !isArch
+    ? `<button class="arch-btn" onclick="archiveReq('${r.id}','${r.sheet}')" title="В архив">📦</button>`
+    : `<button class="unarch-btn" onclick="unarchiveReq('${r.id}','${r.sheet}')" title="Вернуть из архива">↩ Вернуть</button>`;
   return `<div class="req${overdue?' overdue':''}">
     <div class="req-head">
       <div>
@@ -436,27 +448,22 @@ function renderReq(r, isArch) {
         ${overdue?'<span class="badge b-overdue">⚠ Давно в работе</span>':''}
         <span class="badge ${bc}">${r.status}</span>
         ${subBadge}
+        ${archBtn}
       </div>
     </div>
     <span class="badge b-cat">${r.cat}</span>
     <div class="req-desc">${r.desc}</div>
     <div class="req-foot">
       ${photosHtml}
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        ${archBtn}
-        ${!isArch?`<textarea class="note-input" placeholder="Комментарий исполнителя"
-          onchange="saveNote('${r.id}','${r.sheet}',this.value)">${(r.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-        <select class="status-sel" onchange="changeStatus('${r.id}','${r.sheet}',this.value)">
-          <option ${r.status==='Новая'?'selected':''}>Новая</option>
-          <option ${r.status==='В работе'?'selected':''}>В работе</option>
-          <option ${r.status==='Выполнено'?'selected':''}>Выполнено</option>
-        </select>
-        ${subSel}`:'<span class="badge b-cat">Архив · '+r.sheet+'</span>'}
+      <div class="req-controls">
+        ${noteField}
+        ${statusSel}
       </div>
     </div>
     ${histHtml}
   </div>`;
 }
+
 
 function quickFilter(cat, st) {
   curCat = cat; curSt = st;
@@ -520,13 +527,24 @@ function fmtDate(d) {
     return dt.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Yekaterinburg'});
   } catch(e) { return d; }
 }
+function fSub(btn) {
+  document.querySelectorAll('#sub-filters .filt').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  curSub = btn.dataset.sub;
+  renderDash();
+}
+
 function fCat(btn) {
   document.querySelectorAll('#cat-filters .filt').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active'); curCat=btn.dataset.cat; renderDash();
 }
 function fSt(btn) {
   document.querySelectorAll('#status-filters .filt').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active'); curSt=btn.dataset.st; renderDash();
+  btn.classList.add('active'); curSt=btn.dataset.st;
+  const subF = document.getElementById('sub-filters');
+  if (subF) subF.style.display = curSt==='В работе' ? 'flex' : 'none';
+  if (curSt !== 'В работе') curSub = 'all';
+  renderDash();
 }
 function openLb(src) {
   document.getElementById('lb-img').src=src;
