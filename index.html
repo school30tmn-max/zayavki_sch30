@@ -133,6 +133,15 @@ textarea{resize:vertical;min-height:90px}
 .history-item .h-time{color:var(--text3);white-space:nowrap;font-size:11px}
 .history-item .h-status{font-weight:500;color:var(--text)}
 .empty{text-align:center;padding:40px;color:var(--text3);font-size:14px}
+.bulk-bar{display:none;align-items:center;gap:10px;padding:10px 14px;background:var(--blue-bg);border:1.5px solid var(--blue);border-radius:var(--radius);margin-bottom:12px;flex-wrap:wrap}
+.bulk-bar.active{display:flex}
+.bulk-count{font-size:13px;color:var(--blue-text);font-weight:500}
+.bulk-btn{padding:6px 14px;border:none;border-radius:var(--radius);font-size:13px;cursor:pointer;font-weight:500}
+.bulk-arch{background:var(--amber-bg);color:var(--amber-text)}
+.bulk-del{background:var(--red-bg);color:var(--red-text)}
+.bulk-clear{background:none;color:var(--text3);font-size:12px;cursor:pointer;border:none;padding:4px 8px}
+.req-cb{width:16px;height:16px;cursor:pointer;accent-color:var(--school);flex-shrink:0}
+.req-head-left{display:flex;align-items:flex-start;gap:8px}
 .spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border2);border-top-color:var(--school);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:8px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .show-arch{font-size:13px;color:var(--text3);cursor:pointer;text-decoration:underline;margin-bottom:10px;display:inline-block}
@@ -219,6 +228,16 @@ textarea{resize:vertical;min-height:90px}
     <button onclick="clearDates()">Сбросить</button>
   </div>
 
+  <div class="bulk-bar" id="bulk-bar">
+    <span class="bulk-count" id="bulk-count">Выбрано: 0</span>
+    <button class="bulk-btn bulk-arch" onclick="bulkArchive()">📦 Архивировать выбранные</button>
+    <button class="bulk-clear" onclick="clearSelection()">✕ Снять выделение</button>
+  </div>
+  <div class="bulk-bar" id="bulk-del-bar" style="display:none">
+    <span class="bulk-count" id="bulk-del-count">Выбрано: 0</span>
+    <button class="bulk-btn bulk-del" onclick="bulkDelete()">🗑 Удалить выбранные</button>
+    <button class="bulk-clear" onclick="clearArchSelection()">✕ Снять выделение</button>
+  </div>
   <div id="loading" style="padding:20px;color:var(--text2);font-size:14px;display:none"><span class="spinner"></span>Загрузка заявок...</div>
   <div class="req-list" id="req-list"></div>
   <div style="margin-top:16px">
@@ -275,16 +294,20 @@ function renderPreviews() {
 async function submitForm() {
   const fields={name:document.getElementById('f-name').value.trim(),phone:document.getElementById('f-phone').value.trim(),room:document.getElementById('f-room').value.trim(),cat:document.getElementById('f-cat').value,desc:document.getElementById('f-desc').value.trim()};
   if(!fields.name||!fields.phone||!fields.room||!fields.cat||!fields.desc) return showAlert('form','Заполните все обязательные поля','error');
-  
   const btn=document.getElementById('submit-btn');btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Отправка...';clearAlert('form');
   try {
-    await fetch(API_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({action:'submit', ...fields, photos})
-    });
-    showAlert('form','Заявка принята!','success');
+    // Шаг 1: отправляем заявку без фото
+    const res = await apiCall({action:'submit', ...fields, photos:[]});
+    if (!res.ok) { showAlert('form','Ошибка: '+(res.error||'неизвестная'),'error'); btn.disabled=false; btn.innerHTML='Отправить заявку'; return; }
+    const reqId = res.id;
+    // Шаг 2: фото по одному отдельными запросами
+    if (photos.length > 0) {
+      for (let i = 0; i < photos.length; i++) {
+        try { await apiCall({action:'addPhoto', id:reqId, cat:fields.cat, photo:photos[i], idx:i}); }
+        catch(pe) {}
+      }
+    }
+    showAlert('form','Заявка принята! Номер: '+reqId,'success');
     ['f-name','f-phone','f-room','f-desc'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('f-cat').value='';
     photos=[];renderPreviews();
@@ -293,6 +316,7 @@ async function submitForm() {
   }
   btn.disabled=false;btn.innerHTML='Отправить заявку';
 }
+
 
 async function unlock() {
   const p=document.getElementById('pwd').value;
@@ -394,7 +418,7 @@ function renderReq(r,isArch) {
   const noteField=!isArch?`<textarea class="note-input" placeholder="Комментарий исполнителя" onchange="saveNote('${r.id}','${r.sheet}',this.value)">${(r.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>`:'';
   const statusSel=!isArch?`<select class="status-sel" style="width:100%" onchange="changeStatus('${r.id}','${r.sheet}',this.value)"><option ${r.status==='Новая'?'selected':''}>Новая</option><option ${r.status==='В работе'?'selected':''}>В работе</option><option ${r.status==='Выполнено'?'selected':''}>Выполнено</option></select>${subSel}`:'';
   const archBtn=!isArch?`<button class="arch-btn" onclick="archiveReq('${r.id}','${r.sheet}')" title="В архив">📦</button>`:`<button class="unarch-btn" onclick="unarchiveReq('${r.id}','${r.sheet}')" title="Вернуть">↩ Вернуть</button>`;
-  return `<div class="req${overdue?' overdue':''}"><div class="req-head"><div><div class="req-meta">${fmtDate(r.date)} · ${r.room} · ${r.phone}</div><div class="req-name">${r.name}</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${overdue&&r.status==='В работе'?'<span class="badge b-overdue" style="font-size:11px">⚠ просрочено</span>':''}<span class="badge ${bc}">${r.status}</span>${subBadge}${archBtn}</div></div><span class="badge b-cat">${r.cat}</span><div class="req-desc">${r.desc}</div><div class="req-foot">${ph}<div class="req-controls">${noteField}${statusSel}</div></div>${hist}</div>`;
+  return `<div class="req${overdue?' overdue':''}" data-id="${r.id}" data-sheet="${r.sheet||''}"><div class="req-head"><div class="req-head-left"><input type="checkbox" class="req-cb${isArch?' arch-cb':' main-cb'}" onchange="onCbChange(this)" data-id="${r.id}" data-sheet="${r.sheet||''}"><div><div class="req-meta">${fmtDate(r.date)} · ${r.room} · ${r.phone}</div><div class="req-name">${r.name}</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${overdue&&r.status==='В работе'?'<span class="badge b-overdue" style="font-size:11px">⚠ просрочено</span>':''}<span class="badge ${bc}">${r.status}</span>${subBadge}${archBtn}</div></div><span class="badge b-cat">${r.cat}</span><div class="req-desc">${r.desc}</div><div class="req-foot">${ph}<div class="req-controls">${noteField}${statusSel}</div></div>${hist}</div>`;
 }
 
 async function changeStatus(id,sheet,status) {
@@ -442,6 +466,64 @@ function fmtDate(d){try{return new Date(d).toLocaleString('ru-RU',{day:'2-digit'
 function openLb(src){document.getElementById('lb-img').src=src;document.getElementById('lb').style.display='flex';}
 function showAlert(where,msg,type){const el=document.getElementById('alert-'+where);el.className='alert '+type;el.textContent=msg;}
 function clearAlert(where){const el=document.getElementById('alert-'+where);el.className='alert';el.textContent='';}
+
+function onCbChange(cb) {
+  const isArch = cb.classList.contains('arch-cb');
+  if (isArch) {
+    const sel = document.querySelectorAll('.arch-cb:checked');
+    const bar = document.getElementById('bulk-del-bar');
+    bar.style.display = sel.length > 0 ? 'flex' : 'none';
+    document.getElementById('bulk-del-count').textContent = 'Выбрано: ' + sel.length;
+  } else {
+    const sel = document.querySelectorAll('.main-cb:checked');
+    const bar = document.getElementById('bulk-bar');
+    bar.classList.toggle('active', sel.length > 0);
+    document.getElementById('bulk-count').textContent = 'Выбрано: ' + sel.length;
+  }
+}
+
+function clearSelection() {
+  document.querySelectorAll('.main-cb:checked').forEach(cb=>cb.checked=false);
+  document.getElementById('bulk-bar').classList.remove('active');
+}
+
+function clearArchSelection() {
+  document.querySelectorAll('.arch-cb:checked').forEach(cb=>cb.checked=false);
+  document.getElementById('bulk-del-bar').style.display='none';
+}
+
+async function bulkArchive() {
+  const selected = [...document.querySelectorAll('.main-cb:checked')];
+  if (!selected.length) return;
+  if (!confirm('Архивировать ' + selected.length + ' заявок?')) return;
+  const items = selected.map(cb=>({id:cb.dataset.id, sheet:cb.dataset.sheet}));
+  const res = await apiCall({action:'bulkArchive', pass:savedPass, items});
+  if (res.ok) {
+    items.forEach(item=>{ allReqs = allReqs.filter(r=>String(r.id)!==String(item.id)); });
+    clearSelection();
+    renderDash();
+  }
+}
+
+async function bulkDelete() {
+  const selected = [...document.querySelectorAll('.arch-cb:checked')];
+  if (!selected.length) return;
+  if (!confirm('Удалить ' + selected.length + ' заявок из архива НАВСЕГДА? Это действие нельзя отменить.')) return;
+  const ids = selected.map(cb=>cb.dataset.id);
+  const res = await apiCall({action:'bulkDelete', pass:savedPass, ids});
+  if (res.ok) {
+    clearArchSelection();
+    // Перезагружаем архив
+    const el = document.getElementById('arch-list');
+    if (el && el.style.display !== 'none') {
+      el.innerHTML = '<span class="spinner"></span> Обновление...';
+      const archRes = await apiCall({action:'archive', pass:savedPass});
+      el.innerHTML = archRes.ok && archRes.data.length
+        ? archRes.data.map(r=>renderReq(r,true)).join('')
+        : '<div class="empty">Архив пуст</div>';
+    }
+  }
+}
 
 function apiCall(data) {
   return new Promise(function(resolve,reject){
