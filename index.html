@@ -256,7 +256,7 @@ function renderPreviews() {
 async function submitForm() {
   const fields={name:document.getElementById('f-name').value.trim(),phone:document.getElementById('f-phone').value.trim(),room:document.getElementById('f-room').value.trim(),cat:document.getElementById('f-cat').value,desc:document.getElementById('f-desc').value.trim()};
   if(!fields.name||!fields.phone||!fields.room||!fields.cat||!fields.desc) return showAlert('form','Заполните все обязательные поля','error');
-  if(photos.length===0) return showAlert('form','Прикрепите хотя бы одно фото','error');
+  // if(photos.length===0) return showAlert('form','Прикрепите хотя бы одно фото','error'); // TEMP
   const btn=document.getElementById('submit-btn');btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Отправка...';clearAlert('form');
   try {
     const res=await apiCall({action:'submit',...fields,photos});
