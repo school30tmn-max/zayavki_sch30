@@ -246,7 +246,26 @@ function switchTab(t) {
 }
 
 function addPhotos(inp) {
-  Array.from(inp.files).forEach(f=>{const r=new FileReader();r.onload=e=>{photos.push(e.target.result);renderPreviews();};r.readAsDataURL(f);});
+  Array.from(inp.files).forEach(f=>{
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = e => {
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX = 800;
+        let w = img.width, h = img.height;
+        if (w > h) { if (w > MAX) { h = h * MAX / w; w = MAX; } }
+        else { if (h > MAX) { w = w * MAX / h; h = MAX; } }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const compressed = canvas.toDataURL('image/jpeg', 0.6);
+        photos.push(compressed);
+        renderPreviews();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(f);
+  });
   inp.value='';
 }
 function renderPreviews() {
@@ -256,13 +275,22 @@ function renderPreviews() {
 async function submitForm() {
   const fields={name:document.getElementById('f-name').value.trim(),phone:document.getElementById('f-phone').value.trim(),room:document.getElementById('f-room').value.trim(),cat:document.getElementById('f-cat').value,desc:document.getElementById('f-desc').value.trim()};
   if(!fields.name||!fields.phone||!fields.room||!fields.cat||!fields.desc) return showAlert('form','Заполните все обязательные поля','error');
-  // if(photos.length===0) return showAlert('form','Прикрепите хотя бы одно фото','error'); // TEMP
+  if(photos.length===0) return showAlert('form','Прикрепите хотя бы одно фото','error');
   const btn=document.getElementById('submit-btn');btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Отправка...';clearAlert('form');
   try {
-    const res=await apiCall({action:'submit',...fields,photos});
-    if(res.ok){showAlert('form','Заявка принята! Номер: '+res.id,'success');['f-name','f-phone','f-room','f-desc'].forEach(id=>document.getElementById(id).value='');document.getElementById('f-cat').value='';photos=[];renderPreviews();}
-    else showAlert('form','Ошибка: '+(res.error||'неизвестная'),'error');
-  }catch(e){showAlert('form','Нет связи. Проверьте интернет.','error');}
+    await fetch(API_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action:'submit', ...fields, photos})
+    });
+    showAlert('form','Заявка принята!','success');
+    ['f-name','f-phone','f-room','f-desc'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('f-cat').value='';
+    photos=[];renderPreviews();
+  } catch(e) {
+    showAlert('form','Нет связи. Проверьте интернет.','error');
+  }
   btn.disabled=false;btn.innerHTML='Отправить заявку';
 }
 
