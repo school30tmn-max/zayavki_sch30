@@ -473,9 +473,21 @@ function clearAlert(where) {
   const el=document.getElementById('alert-'+where);
   el.className='alert'; el.textContent='';
 }
-async function apiCall(data) {
-  const res = await fetch(API_URL,{method:'POST',body:JSON.stringify(data)});
-  return res.json();
+function apiCall(data) {
+  return new Promise(function(resolve, reject) {
+    const cb = 'cb' + Date.now() + Math.floor(Math.random()*10000);
+    const action = data.action || 'ping';
+    const pass = data.pass || '';
+    const d = encodeURIComponent(JSON.stringify(data));
+    const url = API_URL + '?action=' + action + '&p=' + encodeURIComponent(pass) + '&d=' + d + '&callback=' + cb;
+    const script = document.createElement('script');
+    const timer = setTimeout(function(){ reject(new Error('timeout')); cleanup(); }, 15000);
+    function cleanup(){ delete window[cb]; document.body.removeChild(script); clearTimeout(timer); }
+    window[cb] = function(result){ resolve(result); cleanup(); };
+    script.src = url;
+    script.onerror = function(){ reject(new Error('network')); cleanup(); };
+    document.body.appendChild(script);
+  });
 }
 </script>
 </body>
