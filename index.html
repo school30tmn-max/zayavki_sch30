@@ -247,245 +247,184 @@ textarea{resize:vertical;min-height:90px}
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbwufM8p19ARGL3SCo4WVBnVULf-hD6OdiKjchlPxrgmEN5tfcY0d8QJ6I20T3qitqqFEA/exec';
 
-let photos = [];
-let allReqs = [];
-let curCat = 'all', curSt = 'all', curSub = [];
-let dateFrom = null, dateTo = null;
-let savedPass = '';
-let archiveVisible = false;
+let photos=[], allReqs=[], curCat='all', curSt='all', curSub=[], dateFrom=null, dateTo=null, savedPass='', archiveVisible=false;
 
 function switchTab(t) {
-  document.querySelectorAll('.tab').forEach((b,i) =>
-    b.classList.toggle('active', (t==='form'&&i===0)||(t==='dash'&&i===1)));
-  document.getElementById('view-form').style.display = t==='form'?'':'none';
-  document.getElementById('view-dash').style.display = t==='dash'?'':'none';
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',(t==='form'&&i===0)||(t==='dash'&&i===1)));
+  document.getElementById('view-form').style.display=t==='form'?'':'none';
+  document.getElementById('view-dash').style.display=t==='dash'?'':'none';
 }
 
 function addPhotos(inp) {
-  Array.from(inp.files).forEach(f => {
-    const r = new FileReader();
-    r.onload = e => { photos.push(e.target.result); renderPreviews(); };
-    r.readAsDataURL(f);
-  });
-  inp.value = '';
+  Array.from(inp.files).forEach(f=>{const r=new FileReader();r.onload=e=>{photos.push(e.target.result);renderPreviews();};r.readAsDataURL(f);});
+  inp.value='';
 }
 function renderPreviews() {
-  document.getElementById('previews').innerHTML = photos.map((d,i) =>
-    `<div class="prev-wrap"><img src="${d}"><button class="prev-rm" onclick="photos.splice(${i},1);renderPreviews()">×</button></div>`
-  ).join('');
+  document.getElementById('previews').innerHTML=photos.map((d,i)=>`<div class="prev-wrap"><img src="${d}"><button class="prev-rm" onclick="photos.splice(${i},1);renderPreviews()">×</button></div>`).join('');
 }
 
 async function submitForm() {
-  const fields = {
-    name:  document.getElementById('f-name').value.trim(),
-    phone: document.getElementById('f-phone').value.trim(),
-    room:  document.getElementById('f-room').value.trim(),
-    cat:   document.getElementById('f-cat').value,
-    desc:  document.getElementById('f-desc').value.trim()
-  };
-  if (!fields.name||!fields.phone||!fields.room||!fields.cat||!fields.desc)
-    return showAlert('form','Заполните все обязательные поля','error');
-  if (photos.length === 0) return showAlert('form','Прикрепите хотя бы одно фото','error');
-  const btn = document.getElementById('submit-btn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Отправка...';
-  clearAlert('form');
+  const fields={name:document.getElementById('f-name').value.trim(),phone:document.getElementById('f-phone').value.trim(),room:document.getElementById('f-room').value.trim(),cat:document.getElementById('f-cat').value,desc:document.getElementById('f-desc').value.trim()};
+  if(!fields.name||!fields.phone||!fields.room||!fields.cat||!fields.desc) return showAlert('form','Заполните все обязательные поля','error');
+  if(photos.length===0) return showAlert('form','Прикрепите хотя бы одно фото','error');
+  const btn=document.getElementById('submit-btn');btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Отправка...';clearAlert('form');
   try {
-    const res = await apiCall({ action:'submit', ...fields, photos });
-    if (res.ok) {
-      showAlert('form','Заявка принята! Номер: ' + res.id,'success');
-      ['f-name','f-phone','f-room','f-desc'].forEach(id => document.getElementById(id).value='');
-      document.getElementById('f-cat').value='';
-      photos=[];renderPreviews();
-    } else {
-      showAlert('form','Ошибка: ' + (res.error||'неизвестная'),'error');
-    }
-  } catch(e) {
-    showAlert('form','Нет связи. Проверьте интернет или URL скрипта.','error');
-  }
+    const res=await apiCall({action:'submit',...fields,photos});
+    if(res.ok){showAlert('form','Заявка принята! Номер: '+res.id,'success');['f-name','f-phone','f-room','f-desc'].forEach(id=>document.getElementById(id).value='');document.getElementById('f-cat').value='';photos=[];renderPreviews();}
+    else showAlert('form','Ошибка: '+(res.error||'неизвестная'),'error');
+  }catch(e){showAlert('form','Нет связи. Проверьте интернет.','error');}
   btn.disabled=false;btn.innerHTML='Отправить заявку';
 }
 
 async function unlock() {
-  const p = document.getElementById('pwd').value;
+  const p=document.getElementById('pwd').value;
   document.getElementById('pwd-err').style.display='none';
   document.getElementById('loading').style.display='block';
   try {
-    const res = await apiCall({ action:'getRequests', pass: p });
-    if (res.ok) {
-      savedPass = p;
-      allReqs = res.data;
-      document.getElementById('lock-screen').style.display='none';
-      document.getElementById('dash-inner').style.display='block';
-      renderDash();
-    } else {
-      document.getElementById('pwd-err').style.display='block';
-    }
-  } catch(e) {
-    document.getElementById('pwd-err').textContent='Нет связи с сервером';
-    document.getElementById('pwd-err').style.display='block';
-  }
+    const res=await apiCall({action:'get',pass:p});
+    if(res.ok){savedPass=p;allReqs=res.data;document.getElementById('lock-screen').style.display='none';document.getElementById('dash-inner').style.display='block';renderDash();}
+    else{document.getElementById('pwd-err').textContent='Неверный пароль';document.getElementById('pwd-err').style.display='block';}
+  }catch(e){document.getElementById('pwd-err').textContent='Нет связи с сервером';document.getElementById('pwd-err').style.display='block';}
   document.getElementById('loading').style.display='none';
 }
 
 function isOverdue(req) {
-  if (req.status !== 'В работе') return false;
-  // Берём время последней смены на «В работе» из истории
-  const wipEntry = [...(req.history||[])].reverse().find(h=>h.status==='В работе');
-  if (!wipEntry) return false;
-  const wipTime = parseDate(wipEntry.time);
-  if (!wipTime) return false;
-  const diffDays = (Date.now() - wipTime) / (1000*60*60*24);
-  return diffDays > 3;
+  if(req.status!=='В работе') return false;
+  const e=[...(req.history||[])].reverse().find(h=>h.status==='В работе');
+  if(!e) return false;
+  const t=parseDate(e.time);if(!t) return false;
+  return(Date.now()-t)/(1000*60*60*24)>3;
 }
-
 function parseDate(str) {
-  if (!str) return null;
-  // Формат dd.MM.yyyy HH:mm
-  const m = str.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})/);
-  if (m) return new Date(m[3], m[2]-1, m[1], m[4], m[5]).getTime();
-  // ISO формат
-  const d = new Date(str);
-  return isNaN(d) ? null : d.getTime();
+  if(!str) return null;
+  const m=str.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})/);
+  if(m) return new Date(m[3],m[2]-1,m[1],m[4],m[5]).getTime();
+  const d=new Date(str);return isNaN(d)?null:d.getTime();
 }
-
-function applyDates() {
-  dateFrom = document.getElementById('date-from').value || null;
-  dateTo   = document.getElementById('date-to').value   || null;
-  renderDash();
-}
-function clearDates() {
-  dateFrom = dateTo = null;
-  document.getElementById('date-from').value = '';
-  document.getElementById('date-to').value   = '';
-  renderDash();
-}
-
+function applyDates(){dateFrom=document.getElementById('date-from').value||null;dateTo=document.getElementById('date-to').value||null;renderDash();}
+function clearDates(){dateFrom=dateTo=null;document.getElementById('date-from').value='';document.getElementById('date-to').value='';renderDash();}
 function inDateRange(req) {
-  if (!dateFrom && !dateTo) return true;
-  const t = parseDate(req.date);
-  if (!t) return true;
-  const d = new Date(t);
-  const ds = d.toISOString().slice(0,10);
-  if (dateFrom && ds < dateFrom) return false;
-  if (dateTo   && ds > dateTo)   return false;
+  if(!dateFrom&&!dateTo) return true;
+  const t=parseDate(req.date);if(!t) return true;
+  const ds=new Date(t).toISOString().slice(0,10);
+  if(dateFrom&&ds<dateFrom) return false;
+  if(dateTo&&ds>dateTo) return false;
   return true;
 }
 
 function renderDash() {
-  const active = allReqs.filter(r=>r.status!=='Архив');
-  const total = active.length,
-    nw   = active.filter(r=>r.status==='Новая').length,
-    wip  = active.filter(r=>r.status==='В работе').length,
-    done = active.filter(r=>r.status==='Выполнено').length,
-    prol = active.filter(r=>r.status==='В работе'&&r.sub==='Продление').length,
-    lng  = active.filter(r=>r.status==='В работе'&&r.sub==='Долгосрочный ремонт').length;
-
-  // Статистика
-  document.getElementById('stats').innerHTML = [
-    ['Всего',total,'all','all'],
-    ['Новые',nw,'all','Новая'],
-    ['В работе',wip,'all','В работе'],
-    ['Выполнено',done,'all','Выполнено']
-  ].map(([l,n,cat,st])=>`<div class="stat" onclick="quickFilter('${cat}','${st}')"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
-
-  // Умные фильтры
-  renderSmartFilters(active, prol, lng);
-
-  // Фильтрация
-  let f = active;
-  if (curCat !== 'all') f = f.filter(r=>r.cat===curCat);
-  if (curSt  !== 'all') f = f.filter(r=>r.status===curSt);
-  if (curSub.length > 0) f = f.filter(r=>curSub.includes(r.sub));
-  f = f.filter(r=>inDateRange(r));
-
-  const list = document.getElementById('req-list');
-  if (!f.length) { list.innerHTML='<div class="empty">Заявок не найдено</div>'; return; }
-  list.innerHTML = f.map(r=>renderReq(r)).join('');
+  const active=allReqs.filter(r=>r.status!=='Архив');
+  const total=active.length,nw=active.filter(r=>r.status==='Новая').length,wip=active.filter(r=>r.status==='В работе').length,done=active.filter(r=>r.status==='Выполнено').length,prol=active.filter(r=>r.status==='В работе'&&r.sub==='Продление').length,lng=active.filter(r=>r.status==='В работе'&&r.sub==='Долгосрочный ремонт').length;
+  document.getElementById('stats').innerHTML=[['Всего',total,'all','all'],['Новые',nw,'all','Новая'],['В работе',wip,'all','В работе'],['Выполнено',done,'all','Выполнено']]
+    .map(([l,n,cat,st])=>`<div class="stat" onclick="quickFilter('${cat}','${st}')"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+  renderSmartFilters(active,prol,lng);
+  let f=active;
+  if(curCat!=='all') f=f.filter(r=>r.cat===curCat);
+  if(curSt!=='all') f=f.filter(r=>r.status===curSt);
+  if(curSub.length>0) f=f.filter(r=>curSub.includes(r.sub));
+  f=f.filter(r=>inDateRange(r));
+  const list=document.getElementById('req-list');
+  if(!f.length){list.innerHTML='<div class="empty">Заявок не найдено</div>';return;}
+  list.innerHTML=f.map(r=>renderReq(r)).join('');
 }
 
-function renderSmartFilters(active, prol, lng) {
-  const cats = ['Сантехника','Электрика','Системное администрирование','Клининг','Пропускные карты','Иное'];
-  const catLabels = {'Сантехника':'Сантехника','Электрика':'Электрика','Системное администрирование':'Сисадмин','Клининг':'Клининг','Пропускные карты':'Пропуска','Иное':'Иное'};
-  const statuses = [
-    {st:'all', label:'Все статусы'},
-    {st:'Новая', label:'Новые'},
-    {st:'В работе', label:'В работе'},
-    {st:'Выполнено', label:'Выполнено'}
-  ];
-
-  let html = '';
-
-  // Строка 1: статусы
-  html += statuses.map(({st, label}) => {
-    const n = st==='all' ? active.length : active.filter(r=>r.status===st).length;
-    const isActive = curSt===st;
-    return `<button class="filt${isActive?' active':''}" onclick="fStSmart('${st}')">${label} <span style="opacity:.7">${n}</span></button>`;
-  }).join('');
-
-  // Строка 2 (только если выбрано "В работе"): тогглы подстатусов
-  if (curSt === 'В работе') {
-    html += ' <span style="color:var(--border2);margin:0 4px">|</span> ';
+function renderSmartFilters(active,prol,lng) {
+  const cats=['Сантехника','Электрика','Системное администрирование','Клининг','Пропускные карты','Иное'];
+  const catLabels={'Сантехника':'Сантехника','Электрика':'Электрика','Системное администрирование':'Сисадмин','Клининг':'Клининг','Пропускные карты':'Пропуска','Иное':'Иное'};
+  let html='';
+  [['all','Все статусы'],['Новая','Новые'],['В работе','В работе'],['Выполнено','Выполнено']].forEach(([st,label])=>{
+    const n=st==='all'?active.length:active.filter(r=>r.status===st).length;
+    html+=`<button class="filt${curSt===st?' active':''}" onclick="fStSmart('${st}')">${label} <span style="opacity:.7">${n}</span></button> `;
+  });
+  if(curSt==='В работе'){
+    html+=' <span style="color:var(--border2);margin:0 4px">|</span> ';
     [{sub:'Продление',label:'⏳ Продление',n:prol},{sub:'Долгосрочный ремонт',label:'🔧 Долгосрочный ремонт',n:lng}].forEach(({sub,label,n})=>{
-      const isActive = curSub.includes(sub);
-      html += `<button class="filt${isActive?' active':''}" onclick="fSubSmart('${sub}')">${label} <span style="opacity:.7">${n}</span></button> `;
+      html+=`<button class="filt${curSub.includes(sub)?' active':''}" onclick="fSubSmart('${sub}')">${label} <span style="opacity:.7">${n}</span></button> `;
     });
   }
-
-  // Разделитель
-  html += '<br style="width:100%;display:block;margin:6px 0">';
-
-  // Строка 3: категории
-  cats.forEach(cat => {
-    const n = active.filter(r=>r.cat===cat).length;
-    const isActive = curCat===cat;
-    html += `<button class="filt${isActive?' active':''}" onclick="fCatSmart('${cat}')">${catLabels[cat]} <span style="opacity:.7">${n}</span></button> `;
+  html+='<br style="width:100%;display:block;margin:6px 0">';
+  cats.forEach(cat=>{
+    const n=active.filter(r=>r.cat===cat).length;
+    html+=`<button class="filt${curCat===cat?' active':''}" onclick="fCatSmart('${cat}')">${catLabels[cat]} <span style="opacity:.7">${n}</span></button> `;
   });
-
-  document.getElementById('smart-filters').innerHTML = html;
+  document.getElementById('smart-filters').innerHTML=html;
 }
 
-function fStSmart(st) { curSt=st; curSub=[]; renderDash(); }
-function fCatSmart(cat) { curCat = curCat===cat ? 'all' : cat; renderDash(); }
-function fSubSmart(sub) {
-  const idx = curSub.indexOf(sub);
-  if (idx>=0) curSub.splice(idx,1); else curSub.push(sub);
+function quickFilter(cat,st){curCat=cat;curSt=st;curSub=[];renderDash();}
+function fStSmart(st){curSt=st;curSub=[];renderDash();}
+function fCatSmart(cat){curCat=curCat===cat?'all':cat;renderDash();}
+function fSubSmart(sub){const idx=curSub.indexOf(sub);if(idx>=0)curSub.splice(idx,1);else curSub.push(sub);renderDash();}
+
+function renderReq(r,isArch) {
+  const overdue=isOverdue(r);
+  const bc=r.status==='Новая'?'b-new':r.status==='В работе'?(overdue?'b-overdue':'b-wip'):'b-done';
+  const subBadge=r.sub==='Продление'?'<span class="badge b-sub">⏳ Продление</span>':r.sub==='Долгосрочный ремонт'?'<span class="badge b-longterm">🔧 Долгосрочный ремонт</span>':'';
+  const ph=r.photos&&r.photos.length?`<div class="req-photos">${r.photos.map(p=>`<img src="${p}" alt="фото" onclick="openLb(this.src)">`).join('')}</div>`:'';
+  const hist=r.history&&r.history.length>1?`<div class="history"><div class="history-title">История изменений</div>${r.history.map(h=>`<div class="history-item"><span class="h-time">${h.time}</span><span class="h-status">${h.status}</span>${h.note?`<span style="color:var(--text3)"> — ${h.note}</span>`:''}</div>`).join('')}</div>`:'';
+  const subSel=!isArch&&r.status==='В работе'?`<select class="status-sel" style="width:100%" onchange="changeSub('${r.id}','${r.sheet}',this.value)"><option value="" ${!r.sub?'selected':''}>— уточнение —</option><option ${r.sub==='Продление'?'selected':''}>Продление</option><option ${r.sub==='Долгосрочный ремонт'?'selected':''}>Долгосрочный ремонт</option></select>`:'';
+  const noteField=!isArch?`<textarea class="note-input" placeholder="Комментарий исполнителя" onchange="saveNote('${r.id}','${r.sheet}',this.value)">${(r.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>`:'';
+  const statusSel=!isArch?`<select class="status-sel" style="width:100%" onchange="changeStatus('${r.id}','${r.sheet}',this.value)"><option ${r.status==='Новая'?'selected':''}>Новая</option><option ${r.status==='В работе'?'selected':''}>В работе</option><option ${r.status==='Выполнено'?'selected':''}>Выполнено</option></select>${subSel}`:'';
+  const archBtn=!isArch?`<button class="arch-btn" onclick="archiveReq('${r.id}','${r.sheet}')" title="В архив">📦</button>`:`<button class="unarch-btn" onclick="unarchiveReq('${r.id}','${r.sheet}')" title="Вернуть">↩ Вернуть</button>`;
+  return `<div class="req${overdue?' overdue':''}"><div class="req-head"><div><div class="req-meta">${fmtDate(r.date)} · ${r.room} · ${r.phone}</div><div class="req-name">${r.name}</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${overdue&&r.status==='В работе'?'<span class="badge b-overdue" style="font-size:11px">⚠ просрочено</span>':''}<span class="badge ${bc}">${r.status}</span>${subBadge}${archBtn}</div></div><span class="badge b-cat">${r.cat}</span><div class="req-desc">${r.desc}</div><div class="req-foot">${ph}<div class="req-controls">${noteField}${statusSel}</div></div>${hist}</div>`;
+}
+
+async function changeStatus(id,sheet,status) {
+  const req=allReqs.find(r=>String(r.id)===String(id));if(!req)return;
+  const old=req.status;req.status=status;
+  if(old!==status){const now=fmtDate(new Date().toISOString());req.history=req.history||[];req.history.push({status,time:now,note:req.note||''});}
   renderDash();
+  await apiCall({action:'status',pass:savedPass,id,sheet,status});
+}
+async function saveNote(id,sheet,note) {
+  const req=allReqs.find(r=>String(r.id)===String(id));if(req)req.note=note;
+  await apiCall({action:'status',pass:savedPass,id,sheet,status:req?.status,note});
+}
+async function changeSub(id,sheet,sub) {
+  const req=allReqs.find(r=>String(r.id)===String(id));if(!req)return;
+  req.sub=sub;
+  if(sub){const now=fmtDate(new Date().toISOString());req.history=req.history||[];req.history.push({status:req.status,time:now,note:'📌 '+sub});}
+  renderDash();
+  await apiCall({action:'status',pass:savedPass,id,sheet,status:req.status,note:req.note||'',sub});
+}
+async function archiveReq(id,sheet) {
+  if(!confirm('Архивировать заявку?'))return;
+  const res=await apiCall({action:'status',pass:savedPass,id,sheet,status:'Архив'});
+  if(res.ok){allReqs=allReqs.filter(r=>String(r.id)!==String(id));renderDash();}
+}
+async function unarchiveReq(id,sheet) {
+  if(!confirm('Вернуть заявку из архива?'))return;
+  const res=await apiCall({action:'unarch',pass:savedPass,id,sheet});
+  if(res.ok){const el=document.getElementById('arch-list');if(el)el.innerHTML='<div class="empty">Обновите архив</div>';alert('Заявка возвращена. Обновите страницу.');}
+  else alert('Ошибка: '+(res.error||'неизвестная'));
+}
+async function toggleArchive() {
+  archiveVisible=!archiveVisible;
+  const el=document.getElementById('arch-list');
+  const btn=document.querySelector('.show-arch');
+  if(!archiveVisible){el.style.display='none';btn.textContent='📦 Показать архив';return;}
+  btn.textContent='📦 Скрыть архив';el.style.display='block';
+  el.innerHTML='<span class="spinner"></span> Загрузка...';
+  try{const res=await apiCall({action:'archive',pass:savedPass});
+    el.innerHTML=res.ok&&res.data.length?res.data.map(r=>renderReq(r,true)).join(''):'<div class="empty">Архив пуст</div>';
+  }catch(e){el.innerHTML='<div class="empty">Ошибка загрузки</div>';}
 }
 
+function fmtDate(d){try{return new Date(d).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Yekaterinburg'});}catch(e){return d;}}
+function openLb(src){document.getElementById('lb-img').src=src;document.getElementById('lb').style.display='flex';}
+function showAlert(where,msg,type){const el=document.getElementById('alert-'+where);el.className='alert '+type;el.textContent=msg;}
+function clearAlert(where){const el=document.getElementById('alert-'+where);el.className='alert';el.textContent='';}
 
-function fmtDate(d) {
-  try {
-    const dt = new Date(d);
-    return dt.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Yekaterinburg'});
-  } catch(e) { return d; }
-}
-
-function openLb(src) {
-  document.getElementById('lb-img').src=src;
-  document.getElementById('lb').style.display='flex';
-}
-function showAlert(where, msg, type) {
-  const el=document.getElementById('alert-'+where);
-  el.className='alert '+type; el.textContent=msg;
-}
-function clearAlert(where) {
-  const el=document.getElementById('alert-'+where);
-  el.className='alert'; el.textContent='';
-}
 function apiCall(data) {
-  return new Promise(function(resolve, reject) {
-    const cb = 'cb' + Date.now() + Math.floor(Math.random()*10000);
-    const action = data.action || 'ping';
-    const pass = data.pass || '';
-    const d = encodeURIComponent(JSON.stringify(data));
-    const url = API_URL + '?action=' + action + '&p=' + encodeURIComponent(pass) + '&d=' + d + '&callback=' + cb;
-    const script = document.createElement('script');
-    const timer = setTimeout(function(){ reject(new Error('timeout')); cleanup(); }, 15000);
-    function cleanup(){ delete window[cb]; document.body.removeChild(script); clearTimeout(timer); }
-    window[cb] = function(result){ resolve(result); cleanup(); };
-    script.src = url;
-    script.onerror = function(){ reject(new Error('network')); cleanup(); };
+  return new Promise(function(resolve,reject){
+    const cb='cb'+Date.now()+Math.floor(Math.random()*10000);
+    const d=encodeURIComponent(JSON.stringify(data));
+    const url=API_URL+'?action='+(data.action||'ping')+'&d='+d+'&callback='+cb;
+    const script=document.createElement('script');
+    const timer=setTimeout(function(){reject(new Error('timeout'));cleanup();},15000);
+    function cleanup(){delete window[cb];if(script.parentNode)document.body.removeChild(script);clearTimeout(timer);}
+    window[cb]=function(result){resolve(result);cleanup();};
+    script.src=url;
+    script.onerror=function(){reject(new Error('network'));cleanup();};
     document.body.appendChild(script);
   });
 }
