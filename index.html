@@ -78,7 +78,15 @@ textarea{resize:vertical;min-height:90px}
 .lock-btn{padding:10px 28px;background:var(--school);color:#fff;border:none;border-radius:var(--radius);font-size:14px;cursor:pointer;font-weight:500}
 .stats{display:grid;grid-template-columns:repeat(4,minmax(120px,200px));gap:10px;margin-bottom:20px;justify-content:center}
 @media(max-width:500px){.stats{grid-template-columns:repeat(2,1fr)}}
-.stat{background:var(--bg2);border-radius:var(--radius);padding:12px 14px;cursor:pointer;transition:opacity .15s}
+.stat-card{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:16px;cursor:pointer;transition:all .15s;box-shadow:0 1px 6px rgba(0,0,0,.05)}
+.stat-card:hover{border-color:var(--school);box-shadow:0 2px 12px rgba(42,68,204,.12)}
+.stat-card.active-stat{border-color:var(--school);background:var(--blue-bg)}
+.stat-card .sn{font-size:28px;font-weight:700;color:var(--school)}
+.stat-card .sl{font-size:13px;color:var(--text2);margin-top:3px;font-weight:500}
+.stat-card .sub-row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.sub-tog{font-size:11px;padding:3px 8px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg);cursor:pointer;color:var(--text2);transition:all .15s}
+.sub-tog.active{background:var(--school);color:#fff;border-color:var(--school)}
+.sub-tog:hover:not(.active){border-color:var(--school);color:var(--school)}
 .stat:hover{opacity:.8}
 .stat.active-stat{outline:2px solid var(--school)}
 .stat .n{font-size:24px;font-weight:600}
@@ -200,26 +208,8 @@ textarea{resize:vertical;min-height:90px}
 </div>
 
 <div id="dash-inner" style="display:none">
-  <div class="stats" id="stats"></div>
-
-  <div class="filters" id="cat-filters">
-    <button class="filt active" data-cat="all" onclick="fCat(this)">Все</button>
-    <button class="filt" data-cat="Сантехника" onclick="fCat(this)">Сантехника</button>
-    <button class="filt" data-cat="Электрика" onclick="fCat(this)">Электрика</button>
-    <button class="filt" data-cat="Системное администрирование" onclick="fCat(this)">Сисадмин</button>
-    <button class="filt" data-cat="Клининг" onclick="fCat(this)">Клининг</button>
-    <button class="filt" data-cat="Пропускные карты" onclick="fCat(this)">Пропуска</button>
-    <button class="filt" data-cat="Иное" onclick="fCat(this)">Иное</button>
-  </div>
-
-  <div class="filters" id="status-filters">
-    <button class="filt active" data-st="all" onclick="fSt(this)">Все статусы</button>
-    <button class="filt" data-st="Новая" onclick="fSt(this)">Новые</button>
-    <button class="filt" data-st="В работе" onclick="fSt(this)">В работе</button>
-    <button class="filt" data-st="Выполнено" onclick="fSt(this)">Выполнено</button>
-  </div>
-
-  <div id="smart-filters" class="filters" style="margin-bottom:14px"></div>
+  <div id="stat-cards" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px"></div>
+  <div id="cat-row" class="filters" style="margin-bottom:14px"></div>
   <div class="date-row">
     <label>С:</label>
     <input type="date" id="date-from">
@@ -313,44 +303,55 @@ function inDateRange(req) {
 }
 
 function renderDash() {
-  const active=allReqs.filter(r=>r.status!=='Архив');
-  const total=active.length,nw=active.filter(r=>r.status==='Новая').length,wip=active.filter(r=>r.status==='В работе').length,done=active.filter(r=>r.status==='Выполнено').length,prol=active.filter(r=>r.status==='В работе'&&r.sub==='Продление').length,lng=active.filter(r=>r.status==='В работе'&&r.sub==='Долгосрочный ремонт').length;
-  document.getElementById('stats').innerHTML=[['Всего',total,'all','all'],['Новые',nw,'all','Новая'],['В работе',wip,'all','В работе'],['Выполнено',done,'all','Выполнено']]
-    .map(([l,n,cat,st])=>`<div class="stat" onclick="quickFilter('${cat}','${st}')"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
-  renderSmartFilters(active,prol,lng);
-  let f=active;
+  const active = allReqs.filter(r=>r.status!=='Архив');
+  const total  = active.length;
+  const nw     = active.filter(r=>r.status==='Новая').length;
+  const wip    = active.filter(r=>r.status==='В работе').length;
+  const done   = active.filter(r=>r.status==='Выполнено').length;
+  const prol   = active.filter(r=>r.status==='В работе'&&r.sub==='Продление').length;
+  const lng    = active.filter(r=>r.status==='В работе'&&r.sub==='Долгосрочный ремонт').length;
+
+  // Ряд 1: крупные карточки статусов
+  const cards = document.getElementById('stat-cards');
+  cards.innerHTML = `
+    <div class="stat-card${curSt==='all'?' active-stat':''}" onclick="fStSmart('all')">
+      <div class="sn">${total}</div><div class="sl">Всего</div>
+    </div>
+    <div class="stat-card${curSt==='Новая'?' active-stat':''}" onclick="fStSmart('Новая')">
+      <div class="sn">${nw}</div><div class="sl">Новые</div>
+    </div>
+    <div class="stat-card${curSt==='В работе'?' active-stat':''}" onclick="fStSmart('В работе')">
+      <div class="sn">${wip}</div><div class="sl">В работе</div>
+      <div class="sub-row">
+        <button class="sub-tog${curSub.includes('Продление')?' active':''}" onclick="event.stopPropagation();fSubSmart('Продление')">⏳ Продление ${prol}</button>
+        <button class="sub-tog${curSub.includes('Долгосрочный ремонт')?' active':''}" onclick="event.stopPropagation();fSubSmart('Долгосрочный ремонт')">🔧 Долгосрочный ${lng}</button>
+      </div>
+    </div>
+    <div class="stat-card${curSt==='Выполнено'?' active-stat':''}" onclick="fStSmart('Выполнено')">
+      <div class="sn">${done}</div><div class="sl">Выполнено</div>
+    </div>`;
+
+  // Ряд 2: категории с счётчиками
+  const cats = ['all','Сантехника','Электрика','Системное администрирование','Клининг','Пропускные карты','Иное'];
+  const labels = {all:'Все',Сантехника:'Сантехника',Электрика:'Электрика','Системное администрирование':'Сисадмин',Клининг:'Клининг','Пропускные карты':'Пропуска',Иное:'Иное'};
+  document.getElementById('cat-row').innerHTML = cats.map(cat => {
+    const n = cat==='all' ? active.length : active.filter(r=>r.cat===cat).length;
+    return `<button class="filt${curCat===cat?' active':''}" onclick="fCatSmart('${cat}')">${labels[cat]} <span style="opacity:.7">${n}</span></button>`;
+  }).join('');
+
+  // Фильтрация и рендер карточек
+  let f = active;
   if(curCat!=='all') f=f.filter(r=>r.cat===curCat);
-  if(curSt!=='all') f=f.filter(r=>r.status===curSt);
+  if(curSt!=='all')  f=f.filter(r=>r.status===curSt);
   if(curSub.length>0) f=f.filter(r=>curSub.includes(r.sub));
   f=f.filter(r=>inDateRange(r));
+
   const list=document.getElementById('req-list');
   if(!f.length){list.innerHTML='<div class="empty">Заявок не найдено</div>';return;}
   list.innerHTML=f.map(r=>renderReq(r)).join('');
 }
 
-function renderSmartFilters(active,prol,lng) {
-  const cats=['Сантехника','Электрика','Системное администрирование','Клининг','Пропускные карты','Иное'];
-  const catLabels={'Сантехника':'Сантехника','Электрика':'Электрика','Системное администрирование':'Сисадмин','Клининг':'Клининг','Пропускные карты':'Пропуска','Иное':'Иное'};
-  let html='';
-  [['all','Все статусы'],['Новая','Новые'],['В работе','В работе'],['Выполнено','Выполнено']].forEach(([st,label])=>{
-    const n=st==='all'?active.length:active.filter(r=>r.status===st).length;
-    html+=`<button class="filt${curSt===st?' active':''}" onclick="fStSmart('${st}')">${label} <span style="opacity:.7">${n}</span></button> `;
-  });
-  if(curSt==='В работе'){
-    html+=' <span style="color:var(--border2);margin:0 4px">|</span> ';
-    [{sub:'Продление',label:'⏳ Продление',n:prol},{sub:'Долгосрочный ремонт',label:'🔧 Долгосрочный ремонт',n:lng}].forEach(({sub,label,n})=>{
-      html+=`<button class="filt${curSub.includes(sub)?' active':''}" onclick="fSubSmart('${sub}')">${label} <span style="opacity:.7">${n}</span></button> `;
-    });
-  }
-  html+='<br style="width:100%;display:block;margin:6px 0">';
-  cats.forEach(cat=>{
-    const n=active.filter(r=>r.cat===cat).length;
-    html+=`<button class="filt${curCat===cat?' active':''}" onclick="fCatSmart('${cat}')">${catLabels[cat]} <span style="opacity:.7">${n}</span></button> `;
-  });
-  document.getElementById('smart-filters').innerHTML=html;
-}
 
-function quickFilter(cat,st){curCat=cat;curSt=st;curSub=[];renderDash();}
 function fStSmart(st){curSt=st;curSub=[];renderDash();}
 function fCatSmart(cat){curCat=curCat===cat?'all':cat;renderDash();}
 function fSubSmart(sub){const idx=curSub.indexOf(sub);if(idx>=0)curSub.splice(idx,1);else curSub.push(sub);renderDash();}
