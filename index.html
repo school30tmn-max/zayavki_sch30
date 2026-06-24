@@ -421,7 +421,7 @@ function apiCall(data) {
     const d=encodeURIComponent(JSON.stringify(data));
     const url=API_URL+'?action='+(data.action||'ping')+'&d='+d+'&callback='+cb;
     const script=document.createElement('script');
-    const timer=setTimeout(function(){reject(new Error('timeout'));cleanup();},15000);
+    const timer=setTimeout(function(){reject(new Error('timeout'));cleanup();},60000);
     function cleanup(){delete window[cb];if(script.parentNode)document.body.removeChild(script);clearTimeout(timer);}
     window[cb]=function(result){resolve(result);cleanup();};
     script.src=url;
